@@ -1,0 +1,172 @@
+% Define the animal subjects, types of tests, and groups of mice
+animal = {'Mouse 1','Mouse 2', 'Mouse 3','Mouse 4','Mouse 5','Mouse 6','Mouse 7','Mouse 8','Mouse 9','Mouse 10', 'Mouse 11'};
+test = {'NOR'};
+group = {'Old_Female','Young_Male'};
+
+% Loop through each combination of animal, test, and group
+for animal_index = 1:length(animal)
+    for test_index = 1:length(test)
+        for group_index = 1:length(group)
+            % Select the current animal, test, and group
+            selected_animal = animal{animal_index};
+            selected_test = test{test_index};
+            selected_group = group{group_index};
+            
+            % Display the selected combination
+            fprintf('Selected combination: %s %s %s\n', selected_animal, selected_test, selected_group);
+            
+            % Change directory to the folder containing the CSV file
+            groupfolder = fullfile('/Users/smingote/Documents/Nor_Data', selected_test, selected_group); 
+            cd(groupfolder);
+            
+            % Read data from the CSV file
+            filename = sprintf('%s_%s_%d.csv', selected_group, selected_test, animal_index);
+            data = readtable(filename);
+
+            % Extract relevant columns
+            proximity_obj1 = data{:, 15}; % 0 (not near) or 1 (near)
+            proximity_obj2 = data{:, 16};
+            time = data{:, 1};%trail time coloumn A
+            x_nose = data{:, 5};%coloumn E on excel sheet
+            y_nose = data{:, 6};%coloumn F
+            start_sec_obj1 = data{proximity_obj1 == 1,2};%recording time when mouse is near object
+            end_sec_obj1 = data{proximity_obj1 == 0, 2};%recording time when mouse is not near object
+            start_sec_obj2 = data{proximity_obj2 == 1,2};
+            end_sec_obj2 = data{proximity_obj2 == 0, 2};        
+
+            obj1 = [-15 3];%hypothetical coordinates for object 1
+            obj2 = [10 4];%hypothetical coordinates for object 2
+
+            % Initialize visit variables
+            visit_counts_obj1 = 0;
+            visit_counts_obj2 = 0;
+            visit_duration_sec_obj1 = []; % Initialize visit duration array
+            visit_duration_sec_obj2 = [];
+            visit_points_obj1 = []; % Store visit coordinates in array 
+            visit_points_obj2 = []; 
+           
+            is_near_obj1 = false;
+            is_near_obj2 = false;
+            start_visit_sec_obj1 =start_sec_obj1;
+            start_visit_sec_obj2 =start_sec_obj2;
+
+            % Define the threshold distance for being near an object
+            threshold_distance = 8; % in cm
+
+            % Loop through each time point to count visits
+                for i =1:length(proximity_obj1)
+                    if proximity_obj1(i) == 1
+                        %Mouse is near object
+                        %Check if this is the start of a visit
+                        if ~is_near_obj1
+                            %increments # of visits
+                            visit_counts_obj1 = visit_counts_obj1 + 1;
+                            %Record start of visit
+                            start_visit_sec_obj1 = time(i);
+                            is_near_obj1 = true;
+                            %store visit coords
+                            visit_points_obj1 = [visit_points_obj1; x_nose(i), y_nose(i)];
+                            %display visit count
+                            disp(['Visit to Novel Object: ', num2str(visit_counts_obj1), ' started at ', num2str(start_visit_sec_obj1), ' seconds.']);
+                            % Calculate distance from the nose to object 1
+                            distance_from_obj1 = sqrt((x_nose(i) - obj1(1)).^2 + (y_nose(i) - obj1(2)).^2);
+                            disp(['Distance from Novel Object: ', num2str(distance_from_obj1)]);
+                        end
+                    else
+                        %Mouse not near object
+                        %Check if it is the end of current visit
+                        if is_near_obj1
+                            end_visit_sec_obj1 = time(i);
+                            visit_duration_sec_obj1(end+1) = end_visit_sec_obj1 - start_visit_sec_obj1;
+                            is_near_obj1 = false;
+                        end
+                    end
+                end
+                %If visit ends at the last time point
+                if is_near_obj1 % checks if mouse is near object 1
+                    end_visit_sec_obj1 = time(end);%capture end time of current visit to object 1
+                    visit_duration_sec_obj1(end+1) = end_visit_sec_obj1 - start_visit_sec_obj1;%calculates the duration of all visits to object 1
+                end
+
+                
+                % Loop through each time point to count visits for object 2
+                for i =1:length(proximity_obj2)
+                    if proximity_obj2(i) == 1
+                        %Mouse is near object2
+                        %Check if this is the start of a visit
+                        if ~is_near_obj2
+                            %increments # of visits
+                            visit_counts_obj2 = visit_counts_obj2 + 1;
+                            %Record start of visit
+                            start_visit_sec_obj2 = time(i);
+                            is_near_obj2 = true;
+                            %store visit coords
+                            visit_points_obj2 = [visit_points_obj2; x_nose(i), y_nose(i)];
+                            %display visit count
+                            disp(['Visits to Familar Object: ', num2str(visit_counts_obj2), ' started at ', num2str(start_visit_sec_obj2), ' seconds.']);
+                            % Calculate distance from the nose to object 1
+                            distance_from_obj2 = sqrt((x_nose(i) - obj2(1)).^2 + (y_nose(i) - obj2(2)).^2);
+                            disp(['Distance from Familar Object: ', num2str(distance_from_obj2)]);
+                        end
+                    else
+                        %Mouse not near object 2
+                        %Checks if it is the end of current visit
+                        if is_near_obj2
+                            end_visit_sec_obj2 = time(i);
+                            visit_duration_sec_obj2(end+1) = end_visit_sec_obj2 - start_visit_sec_obj2;
+                            is_near_obj2 = false;
+                        end
+                    end
+                end
+
+                if is_near_obj2
+                    end_visit_sec_obj2 = time(end);
+                    visit_duration_sec_obj2(end+1) = end_visit_sec_obj2 - start_visit_sec_obj2;
+                end
+
+                % Plot histogram if there are visits recorded
+                if visit_counts_obj1 > 0
+                    figure;
+                    h1 = histogram(visit_duration_sec_obj1, 'BinWidth', 1, 'BinLimits', [0 5]);
+                    title(sprintf('%s %s %s Novel Object', selected_animal, selected_group, selected_test));
+                    xlabel('Duration (seconds)');
+                    ylabel('Number of Visits');
+                    ylim([0 50]);
+                    
+                    histogram_data_obj1 = h1.Values; 
+                    % Write data to Excel sheet
+                   
+                    if ~isempty(histogram_data_obj1)
+                        csv_folder = '/Users/smingote/Documents/Nor_Data/Results/';
+                        csv_filename_obj1 = sprintf('%s_%s_%s_Object1.csv', selected_animal, selected_group, selected_test);
+                        csv_path_obj1 = fullfile(csv_folder, csv_filename_obj1);
+                        writematrix(histogram_data_obj1, csv_path_obj1);
+                    end
+                   end
+                end
+               
+                if visit_counts_obj2 > 0
+                   figure;
+                   h2 = histogram(visit_duration_sec_obj2, 'BinWidth', 1, 'BinLimits', [0 5]);
+                   title(sprintf('%s %s %s Familar Object', selected_animal, selected_group, selected_test));
+                   xlabel('Duration (seconds)');
+                   ylabel('Number of Visits');
+                   ylim([0 50]);% Store histogram data in cell array
+                   
+                   histogram_data_obj2 = h2.Values;
+                end
+                if visit_counts_obj1 == 0 && visit_counts_obj2 == 0
+                disp('No visits recorded for this combination.');
+                end
+                
+            if ~isempty(histogram_data_obj2)
+                % Write data to Excel sheet
+                
+                    csv_folder = '/Users/smingote/Documents/Nor_Data/Results/';
+                    csv_filename_obj2 = sprintf('%s_%s_%s_Object2.csv', selected_animal, selected_group, selected_test);
+                    csv_path_obj2 = fullfile(csv_folder, csv_filename_obj2);
+                    writematrix(histogram_data_obj2, csv_path_obj2);
+                   
+                end
+            end
+         end
